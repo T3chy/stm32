@@ -49,7 +49,8 @@ UART_HandleTypeDef huart2;
 uint8_t topLine[nChars] = {0};
 uint8_t bottomLine[nChars] = {0};
 uint8_t UART2_rxBuffer[nChars + 1] = {0};
-int ret;
+static int lcdState;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -62,6 +63,35 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void changeDisplayBacklightColor(int col) {
+	/* 0 = off
+	 * D10 = Blue = 1
+	 * A1 = Red = 2
+	   A2=  Green = 3*/
+	HAL_GPIO_WritePin(GPIOA, D10_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, A1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, A2_Pin, GPIO_PIN_SET);
+	lcdState = col;
+	switch (col) {
+	case 0:
+		break;
+	case 1:
+		HAL_GPIO_WritePin(GPIOA, D10_Pin, GPIO_PIN_RESET);
+		break;
+	case 2:
+		HAL_GPIO_WritePin(GPIOA, A1_Pin, GPIO_PIN_RESET);
+		break;
+	case 3:
+		HAL_GPIO_WritePin(GPIOA, A2_Pin, GPIO_PIN_RESET);
+		break;
+
+	}
+}
+void newColor(){
+	lcdState += 1;
+	lcdState %= 4;
+	changeDisplayBacklightColor(lcdState);
+}
 
 /* USER CODE END 0 */
 
@@ -72,7 +102,6 @@ static void MX_USART2_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -96,8 +125,9 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   lcd16x2_init_4bits(D4_GPIO_Port, D4_Pin, D5_Pin, D3_GPIO_Port, D3_Pin, D6_Pin, D11_Pin, D12_Pin);
-  lcd16x2_printf("achungus");
-  ret = HAL_UART_Receive_IT (&huart2, UART2_rxBuffer, nChars + 1);
+	changeDisplayBacklightColor(0);
+
+  HAL_UART_Receive_IT (&huart2, UART2_rxBuffer, nChars + 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,8 +135,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-		HAL_Delay(500);
-		ret = HAL_UART_Receive_IT (&huart2, UART2_rxBuffer, nChars + 1);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -218,11 +247,18 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, A1_Pin|A2_Pin|D9_Pin|D10_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, D3_Pin|D6_Pin|LD3_Pin|D12_Pin
                           |D11_Pin|D5_Pin|D4_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, D9_Pin|D10_Pin, GPIO_PIN_RESET);
+  /*Configure GPIO pins : A1_Pin A2_Pin */
+  GPIO_InitStruct.Pin = A1_Pin|A2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : D3_Pin D6_Pin LD3_Pin D12_Pin
                            D11_Pin D5_Pin D4_Pin */
@@ -233,12 +269,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : D9_Pin D10_Pin */
-  GPIO_InitStruct.Pin = D9_Pin|D10_Pin;
+  /*Configure GPIO pin : D9_Pin */
+  GPIO_InitStruct.Pin = D9_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(D9_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : D10_Pin */
+  GPIO_InitStruct.Pin = D10_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(D10_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -247,13 +290,31 @@ uint8_t * selectedLine;
 uint8_t nLine;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	lcd16x2_twoLines();
-    lcd16x2_setCursor(0, 0);
-    if (UART2_rxBuffer[0] == asciiOne) {
-    	lcd16x2_setCursor(1, 0);
-    }
-    lcd16x2_printf(&UART2_rxBuffer[1]);
-
+	switch ((char) UART2_rxBuffer[0]) {
+	case 'b':
+		changeDisplayBacklightColor(1);
+		break;
+	case 'r':
+		changeDisplayBacklightColor(2);
+		break;
+	case 'g':
+		changeDisplayBacklightColor(3);
+		break;
+	case 'c':
+		changeDisplayBacklightColor(0);
+		break;
+	case 'n':
+		newColor();
+		break;
+	default:
+		lcd16x2_twoLines();
+		lcd16x2_setCursor(0, 0);
+		if (UART2_rxBuffer[0] == asciiOne) {
+			lcd16x2_setCursor(1, 0);
+		}
+		lcd16x2_printf(&UART2_rxBuffer[1]);
+	}
+    HAL_UART_Receive_IT (&huart2, UART2_rxBuffer, nChars + 1);
 
 }
 /* USER CODE END 4 */
