@@ -247,23 +247,13 @@ uint8_t * selectedLine;
 uint8_t nLine;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-
-    nLine = UART2_rxBuffer[0];
-    selectedLine = (nLine == asciiOne) ? &bottomLine : &topLine;
-    if (UART2_rxBuffer[0] == 13) {
-    	NVIC_SystemReset();
-    }
-    for (int i=1; i < nChars + 1; i++) {
-    	if (UART2_rxBuffer[i] == 13) {
-    		NVIC_SystemReset();
-    	}
-    	selectedLine[i-1] = UART2_rxBuffer[i];
-    }
-    lcd16x2_setCursor(1, 0);
-	lcd16x2_printf(bottomLine);
+	lcd16x2_twoLines();
     lcd16x2_setCursor(0, 0);
-	lcd16x2_printf(topLine);
-	lcd16x2_cursorShow(false);
+    if (UART2_rxBuffer[0] == asciiOne) {
+    	lcd16x2_setCursor(1, 0);
+    }
+    lcd16x2_printf(&UART2_rxBuffer[1]);
+
 
 }
 /* USER CODE END 4 */
